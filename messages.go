@@ -18,11 +18,6 @@ func NewMessageGenerator() *MessageGenerator {
 
 func (mg *MessageGenerator) GetTimeBasedMessage(ctx *Context, duration time.Duration) string {
 	hours := int(duration.Hours())
-	minutes := int(duration.Minutes()) % 60
-
-	if hours == 0 && minutes < 30 {
-		return "" // Don't notify for short sessions
-	}
 
 	messages := []string{}
 

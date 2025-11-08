@@ -6,13 +6,67 @@ import (
 	"time"
 )
 
+// NotificationTiming holds all timing configuration for notifications
+type NotificationTiming struct {
+	// WindowCheckInterval is how often to check for active window changes
+	WindowCheckInterval time.Duration
+
+	// TimeBasedNotifications configures time-based coding notifications
+	TimeBasedNotifications struct {
+		// Intervals are the time milestones to trigger notifications (e.g., 30min, 1hr, 2hr)
+		Intervals []time.Duration
+		// Cooldown prevents duplicate notifications within this period
+		Cooldown time.Duration
+		// MinDuration is the minimum time before showing any time-based message
+		MinDuration time.Duration
+	}
+
+	// LanguageNotifications configures language-specific encouragement
+	LanguageNotifications struct {
+		// Cooldown between language-specific notifications
+		Cooldown time.Duration
+	}
+
+	// HealthReminders configures health and wellness reminders
+	HealthReminders struct {
+		// Interval between health reminder notifications
+		Interval time.Duration
+	}
+}
+
+// DefaultNotificationTiming returns sensible default timing configuration
+func DefaultNotificationTiming() *NotificationTiming {
+	nt := &NotificationTiming{
+		WindowCheckInterval: 5 * time.Second,
+	}
+
+	// Time-based: notify at 30min, 1hr, 2hr, 3hr, etc.
+	nt.TimeBasedNotifications.Intervals = []time.Duration{
+		30 * time.Minute,
+		1 * time.Hour,
+		2 * time.Hour,
+		3 * time.Hour,
+		4 * time.Hour,
+	}
+	nt.TimeBasedNotifications.Cooldown = 50 * time.Minute
+	nt.TimeBasedNotifications.MinDuration = 30 * time.Minute
+
+	// Language notifications: every 30 minutes
+	nt.LanguageNotifications.Cooldown = 30 * time.Minute
+
+	// Health reminders: every 20 minutes
+	nt.HealthReminders.Interval = 20 * time.Minute
+
+	return nt
+}
+
 type EmotionalSupportApp struct {
-	tracker       *WindowTracker
-	detector      *ContextDetector
-	messenger     *MessageGenerator
-	notifier      *Notifier
-	state         *AppState
-	checkInterval time.Duration
+	tracker   *WindowTracker
+	detector  *ContextDetector
+	messenger *MessageGenerator
+	notifier  *Notifier
+	state     *AppState
+	timing    *NotificationTiming
 }
 
 func NewEmotionalSupportApp() *EmotionalSupportApp {
@@ -23,12 +77,12 @@ func NewEmotionalSupportApp() *EmotionalSupportApp {
 	}
 
 	return &EmotionalSupportApp{
-		tracker:       NewWindowTracker(),
-		detector:      NewContextDetector(),
-		messenger:     NewMessageGenerator(),
-		notifier:      NewNotifier(),
-		state:         state,
-		checkInterval: 5 * time.Second, // Check every 5 seconds
+		tracker:   NewWindowTracker(),
+		detector:  NewContextDetector(),
+		messenger: NewMessageGenerator(),
+		notifier:  NewNotifier(),
+		state:     state,
+		timing:    DefaultNotificationTiming(),
 	}
 }
 
@@ -40,7 +94,7 @@ func (app *EmotionalSupportApp) Run() error {
 		log.Printf("Warning: Could not send welcome notification: %v", err)
 	}
 
-	ticker := time.NewTicker(app.checkInterval)
+	ticker := time.NewTicker(app.timing.WindowCheckInterval)
 	defer ticker.Stop()
 
 	lastWindow := ""
@@ -86,23 +140,28 @@ func (app *EmotionalSupportApp) Run() error {
 
 func (app *EmotionalSupportApp) checkAndNotify(context *Context, duration time.Duration, lastNotificationTime map[string]time.Time) {
 	now := time.Now()
+	timing := app.timing
 
-	// Check for time-based notifications (e.g., every hour of coding)
-	if context.IsProgramming {
-		hours := int(duration.Hours())
-		minutes := int(duration.Minutes()) % 60
-		// Notify at 30 minutes, 1 hour, 2 hours, etc.
-		if (hours > 0 && minutes == 0) || (hours == 0 && minutes == 30) {
-			key := fmt.Sprintf("time_%dh%dm_%s", hours, minutes, context.Program)
-			if lastNotif, ok := lastNotificationTime[key]; !ok || now.Sub(lastNotif) > 50*time.Minute {
-				message := app.messenger.GetTimeBasedMessage(context, duration)
-				if message != "" {
-					if err := app.notifier.Send("Emotional Support", message, ""); err != nil {
-						log.Printf("Error sending notification: %v", err)
-					} else {
-						lastNotificationTime[key] = now
+	// Check for time-based notifications
+	if context.IsProgramming && duration >= timing.TimeBasedNotifications.MinDuration {
+		// Check if we've reached any of the configured intervals
+		// We check within a small window (2x check interval) to account for timing variations
+		checkWindow := 2 * timing.WindowCheckInterval
+		for _, interval := range timing.TimeBasedNotifications.Intervals {
+			// Check if we're at or just past the interval (within the check window)
+			if duration >= interval && duration <= interval+checkWindow {
+				key := fmt.Sprintf("time_%s_%s", interval.String(), context.Program)
+				if lastNotif, ok := lastNotificationTime[key]; !ok || now.Sub(lastNotif) > timing.TimeBasedNotifications.Cooldown {
+					message := app.messenger.GetTimeBasedMessage(context, duration)
+					if message != "" {
+						if err := app.notifier.Send("Emotional Support", message, ""); err != nil {
+							log.Printf("Error sending notification: %v", err)
+						} else {
+							lastNotificationTime[key] = now
+						}
 					}
 				}
+				break // Only trigger one notification per check
 			}
 		}
 	}
@@ -110,7 +169,7 @@ func (app *EmotionalSupportApp) checkAndNotify(context *Context, duration time.D
 	// Check for language-specific encouragement
 	if context.Language != "" {
 		key := fmt.Sprintf("lang_%s", context.Language)
-		if lastNotif, ok := lastNotificationTime[key]; !ok || now.Sub(lastNotif) > 30*time.Minute {
+		if lastNotif, ok := lastNotificationTime[key]; !ok || now.Sub(lastNotif) > timing.LanguageNotifications.Cooldown {
 			message := app.messenger.GetLanguageMessage(context.Language)
 			if message != "" {
 				if err := app.notifier.Send("Emotional Support", message, ""); err != nil {
@@ -122,9 +181,9 @@ func (app *EmotionalSupportApp) checkAndNotify(context *Context, duration time.D
 		}
 	}
 
-	// Check for health reminders (every 20 minutes)
+	// Check for health reminders
 	key := "health_reminder"
-	if lastNotif, ok := lastNotificationTime[key]; !ok || now.Sub(lastNotif) > 20*time.Minute {
+	if lastNotif, ok := lastNotificationTime[key]; !ok || now.Sub(lastNotif) > timing.HealthReminders.Interval {
 		message := app.messenger.GetHealthReminder()
 		if message != "" {
 			if err := app.notifier.Send("Emotional Support", message, ""); err != nil {
