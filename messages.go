@@ -25,40 +25,90 @@ func (mg *MessageGenerator) GetTimeBasedMessage(ctx *Context, duration time.Dura
 	timeStr := mg.formatDuration(hours, minutes)
 	programName := mg.formatProgramName(ctx.Program)
 
+	// Extract meaningful info from window title
+	fileInfo := mg.extractFileInfo(ctx.WindowTitle)
+	projectInfo := mg.extractProjectInfo(ctx.WindowTitle, ctx.ProjectPath)
+
 	messages := []string{}
 
-	// Program-specific messages
+	// Program-specific messages with window title context
 	if ctx.Program == "vim" || ctx.Program == "nvim" {
-		messages = []string{
-			fmt.Sprintf("Wow, you've been in %s for %s! I'm so proud of you! 🎉", programName, timeStr),
-			fmt.Sprintf("%s in %s? You're a true wizard! ✨", timeStr, programName),
-			fmt.Sprintf("Your %s skills are amazing! %s of focus! 💪", programName, timeStr),
+		if fileInfo != "" {
+			messages = []string{
+				fmt.Sprintf("Wow, you've been editing %s in %s for %s! I'm so proud of you! 🎉", fileInfo, programName, timeStr),
+				fmt.Sprintf("%s in %s working on %s? You're a true wizard! ✨", timeStr, programName, fileInfo),
+				fmt.Sprintf("Your %s skills are amazing! %s of focus on %s! 💪", programName, timeStr, fileInfo),
+			}
+		} else {
+			messages = []string{
+				fmt.Sprintf("Wow, you've been in %s for %s! I'm so proud of you! 🎉", programName, timeStr),
+				fmt.Sprintf("%s in %s? You're a true wizard! ✨", timeStr, programName),
+				fmt.Sprintf("Your %s skills are amazing! %s of focus! 💪", programName, timeStr),
+			}
 		}
 	} else if ctx.Program == "vscode" {
-		messages = []string{
-			fmt.Sprintf("You've been coding in %s for %s! Keep up the amazing work! 🚀", programName, timeStr),
-			fmt.Sprintf("%s of dedication in %s! You're doing great! 💚", timeStr, programName),
-			fmt.Sprintf("Look at you go! %s of focused coding in %s! 🌟", timeStr, programName),
+		if projectInfo != "" {
+			messages = []string{
+				fmt.Sprintf("You've been coding in %s on %s for %s! Keep up the amazing work! 🚀", programName, projectInfo, timeStr),
+				fmt.Sprintf("%s of dedication in %s working on %s! You're doing great! 💚", timeStr, programName, projectInfo),
+				fmt.Sprintf("Look at you go! %s of focused coding in %s on %s! 🌟", timeStr, programName, projectInfo),
+			}
+		} else if fileInfo != "" {
+			messages = []string{
+				fmt.Sprintf("You've been coding in %s on %s for %s! Keep up the amazing work! 🚀", programName, fileInfo, timeStr),
+				fmt.Sprintf("%s of dedication in %s! You're doing great! 💚", timeStr, programName),
+				fmt.Sprintf("Look at you go! %s of focused coding in %s! 🌟", timeStr, programName),
+			}
+		} else {
+			messages = []string{
+				fmt.Sprintf("You've been coding in %s for %s! Keep up the amazing work! 🚀", programName, timeStr),
+				fmt.Sprintf("%s of dedication in %s! You're doing great! 💚", timeStr, programName),
+				fmt.Sprintf("Look at you go! %s of focused coding in %s! 🌟", timeStr, programName),
+			}
 		}
 	} else if ctx.IsProgramming {
-		messages = []string{
-			fmt.Sprintf("You've been coding in %s for %s! Keep up the amazing work! 🚀", programName, timeStr),
-			fmt.Sprintf("%s of dedication in %s! You're doing great! 💚", timeStr, programName),
-			fmt.Sprintf("Look at you go! %s of focused coding in %s! 🌟", timeStr, programName),
+		if fileInfo != "" {
+			messages = []string{
+				fmt.Sprintf("You've been coding in %s on %s for %s! Keep up the amazing work! 🚀", programName, fileInfo, timeStr),
+				fmt.Sprintf("%s of dedication in %s working on %s! You're doing great! 💚", timeStr, programName, fileInfo),
+				fmt.Sprintf("Look at you go! %s of focused coding in %s on %s! 🌟", timeStr, programName, fileInfo),
+			}
+		} else {
+			messages = []string{
+				fmt.Sprintf("You've been coding in %s for %s! Keep up the amazing work! 🚀", programName, timeStr),
+				fmt.Sprintf("%s of dedication in %s! You're doing great! 💚", timeStr, programName),
+				fmt.Sprintf("Look at you go! %s of focused coding in %s! 🌟", timeStr, programName),
+			}
 		}
 	} else {
-		// Non-programming apps - fun messages
+		// Non-programming apps - use window title if available
 		if ctx.Program == "firefox" || ctx.Program == "chrome" || ctx.Program == "chromium" {
-			messages = []string{
-				fmt.Sprintf("%s is truly the best! It's been %s! 🌐", programName, timeStr),
-				fmt.Sprintf("You've been browsing in %s for %s! Hope you're having fun! 💚", programName, timeStr),
-				fmt.Sprintf("%s for %s? That's some serious browsing! 🚀", programName, timeStr),
+			if ctx.WindowTitle != "" && len(ctx.WindowTitle) < 50 {
+				messages = []string{
+					fmt.Sprintf("%s is truly the best! You've been on '%s' for %s! 🌐", programName, mg.truncateTitle(ctx.WindowTitle, 40), timeStr),
+					fmt.Sprintf("You've been browsing '%s' in %s for %s! Hope you're having fun! 💚", mg.truncateTitle(ctx.WindowTitle, 40), programName, timeStr),
+					fmt.Sprintf("%s for %s browsing '%s'? That's some serious browsing! 🚀", programName, timeStr, mg.truncateTitle(ctx.WindowTitle, 40)),
+				}
+			} else {
+				messages = []string{
+					fmt.Sprintf("%s is truly the best! It's been %s! 🌐", programName, timeStr),
+					fmt.Sprintf("You've been browsing in %s for %s! Hope you're having fun! 💚", programName, timeStr),
+					fmt.Sprintf("%s for %s? That's some serious browsing! 🚀", programName, timeStr),
+				}
 			}
 		} else if ctx.Program != "" {
-			messages = []string{
-				fmt.Sprintf("You've been using %s for %s! Keep it up! 💪", programName, timeStr),
-				fmt.Sprintf("%s for %s? You're focused! 🌟", programName, timeStr),
-				fmt.Sprintf("Wow, %s in %s! You're doing great! 💚", timeStr, programName),
+			if ctx.WindowTitle != "" && len(ctx.WindowTitle) < 50 {
+				messages = []string{
+					fmt.Sprintf("You've been using %s working on '%s' for %s! Keep it up! 💪", programName, mg.truncateTitle(ctx.WindowTitle, 40), timeStr),
+					fmt.Sprintf("%s in %s on '%s'? You're focused! 🌟", timeStr, programName, mg.truncateTitle(ctx.WindowTitle, 40)),
+					fmt.Sprintf("Wow, %s in %s working on '%s'! You're doing great! 💚", timeStr, programName, mg.truncateTitle(ctx.WindowTitle, 40)),
+				}
+			} else {
+				messages = []string{
+					fmt.Sprintf("You've been using %s for %s! Keep it up! 💪", programName, timeStr),
+					fmt.Sprintf("%s for %s? You're focused! 🌟", programName, timeStr),
+					fmt.Sprintf("Wow, %s in %s! You're doing great! 💚", timeStr, programName),
+				}
 			}
 		}
 	}
@@ -67,6 +117,74 @@ func (mg *MessageGenerator) GetTimeBasedMessage(ctx *Context, duration time.Dura
 		return messages[mg.rng.Intn(len(messages))]
 	}
 	return ""
+}
+
+func (mg *MessageGenerator) extractFileInfo(windowTitle string) string {
+	if windowTitle == "" {
+		return ""
+	}
+
+	// Try to extract filename from common patterns
+	// Examples: "main.go - Editor", "/path/to/file.py", "file.py (Project Name)"
+
+	// Look for file extensions
+	extensions := []string{".go", ".py", ".js", ".ts", ".java", ".rs", ".cpp", ".c", ".h", ".rb", ".php", ".kt", ".swift", ".dart", ".scala"}
+	for _, ext := range extensions {
+		if idx := strings.Index(windowTitle, ext); idx > 0 {
+			// Extract filename
+			start := strings.LastIndex(windowTitle[:idx], "/")
+			if start == -1 {
+				start = strings.LastIndex(windowTitle[:idx], " ")
+			}
+			if start >= 0 {
+				filename := strings.TrimSpace(windowTitle[start+1 : idx+len(ext)])
+				if len(filename) > 0 && len(filename) < 50 {
+					return filename
+				}
+			} else {
+				filename := strings.TrimSpace(windowTitle[:idx+len(ext)])
+				if len(filename) > 0 && len(filename) < 50 {
+					return filename
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+func (mg *MessageGenerator) extractProjectInfo(windowTitle, projectPath string) string {
+	// First try project path
+	if projectPath != "" {
+		parts := strings.Split(projectPath, "/")
+		if len(parts) > 0 {
+			projectName := parts[len(parts)-1]
+			if projectName != "" && len(projectName) < 40 {
+				return projectName
+			}
+		}
+	}
+
+	// Try to extract from window title (e.g., "file.py (Project Name)")
+	if windowTitle != "" {
+		if idx := strings.Index(windowTitle, "("); idx > 0 {
+			if endIdx := strings.Index(windowTitle[idx:], ")"); endIdx > 0 {
+				projectName := strings.TrimSpace(windowTitle[idx+1 : idx+endIdx])
+				if len(projectName) > 0 && len(projectName) < 40 {
+					return projectName
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+func (mg *MessageGenerator) truncateTitle(title string, maxLen int) string {
+	if len(title) <= maxLen {
+		return title
+	}
+	return title[:maxLen-3] + "..."
 }
 
 func (mg *MessageGenerator) formatDuration(hours, minutes int) string {
