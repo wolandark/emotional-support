@@ -1,20 +1,20 @@
-# Emotional Support Activity Tracker 💚
+# Emotional Support Activity Tracker
 
 A cute activity tracker for Linux (X11) that provides emotional support notifications while you code. It tracks your active windows and programs, detects what you're working on, and sends encouraging messages like "wow you've been in vim for an hour! im so proud of you" or "i know java is hard, but you got it!".
 
 ## Features
 
-- 🪟 **Window Tracking**: Monitors active windows and programs on X11
-- 💻 **Program Detection**: Recognizes popular editors and IDEs (vim, VSCode, Emacs, IntelliJ, etc.)
-- 🔍 **Language Detection**: Attempts to detect programming languages from:
+- **Window Tracking**: Monitors active windows and programs on X11
+- **Program Detection**: Recognizes popular editors and IDEs (vim, VSCode, Emacs, IntelliJ, etc.)
+- **Language Detection**: Attempts to detect programming languages from:
   - File extensions in window titles
   - IDE workspace files (VSCode settings.json)
   - Project files (go.mod, package.json, requirements.txt, etc.)
-- 💚 **Emotional Support Messages**: 
+- **Emotional Support Messages**: 
   - Time-based encouragement (e.g., "You've been coding for 1 hour!")
   - Language-specific support (e.g., "I know Java is hard, but you got it!")
   - Health reminders (stay hydrated, blink your eyes, stretch)
-- 💾 **State Persistence**: Saves activity history to `~/.config/emotional-support/state.json`
+- **State Persistence**: Saves activity history to `~/.config/emotional-support/state.json`
 
 ## Requirements
 
@@ -109,5 +109,5 @@ Activity history is saved to `~/.config/emotional-support/state.json`. This file
 
 ## License
 
-Feel free to use and modify as you wish! 💚
+Feel free to use and modify as you wish! 
 
