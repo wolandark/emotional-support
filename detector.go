@@ -39,6 +39,11 @@ func NewContextDetector() *ContextDetector {
 	cd.programPatterns["kate"] = regexp.MustCompile(`(?i)kate`)
 	cd.programPatterns["nano"] = regexp.MustCompile(`(?i)nano`)
 
+	// Browsers
+	cd.programPatterns["firefox"] = regexp.MustCompile(`(?i)firefox`)
+	cd.programPatterns["chrome"] = regexp.MustCompile(`(?i)chrome`)
+	cd.programPatterns["chromium"] = regexp.MustCompile(`(?i)chromium`)
+
 	// Language file extensions
 	cd.languageExts["go"] = []string{".go"}
 	cd.languageExts["java"] = []string{".java"}
@@ -69,14 +74,24 @@ func (cd *ContextDetector) DetectContext(windowInfo *WindowInfo) *Context {
 	titleLower := strings.ToLower(windowInfo.Title)
 	processLower := strings.ToLower(windowInfo.Process)
 
-	// Check for editors/IDEs
+	// Check for editors/IDEs and browsers
+	programmingPrograms := map[string]bool{
+		"vim": true, "vscode": true, "emacs": true, "idea": true,
+		"sublime": true, "gedit": true, "kate": true, "nano": true,
+	}
+
 	for program, pattern := range cd.programPatterns {
 		if pattern.MatchString(titleLower) || pattern.MatchString(processLower) {
 			ctx.Program = program
-			ctx.IsProgramming = true
+			ctx.IsProgramming = programmingPrograms[program]
 			ctx.IsIDE = (program == "vscode" || program == "idea" || program == "sublime")
 			break
 		}
+	}
+
+	// If no pattern matched but we have a process name, use it
+	if ctx.Program == "" && windowInfo.Process != "" {
+		ctx.Program = windowInfo.Process
 	}
 
 	// Try to extract file path from window title

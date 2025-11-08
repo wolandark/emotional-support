@@ -48,14 +48,14 @@ func DefaultNotificationTiming() *NotificationTiming {
 		3 * time.Hour,
 		4 * time.Hour,
 	}
-	nt.TimeBasedNotifications.Cooldown = 50 * time.Minute
-	nt.TimeBasedNotifications.MinDuration = 30 * time.Minute
+	nt.TimeBasedNotifications.Cooldown = 1 * time.Minute
+	nt.TimeBasedNotifications.MinDuration = 2 * time.Minute
 
 	// Language notifications: every 30 minutes
-	nt.LanguageNotifications.Cooldown = 30 * time.Minute
+	nt.LanguageNotifications.Cooldown = 3 * time.Minute
 
 	// Health reminders: every 20 minutes
-	nt.HealthReminders.Interval = 20 * time.Minute
+	nt.HealthReminders.Interval = 2 * time.Minute
 
 	return nt
 }
@@ -67,6 +67,7 @@ type EmotionalSupportApp struct {
 	notifier  *Notifier
 	state     *AppState
 	timing    *NotificationTiming
+	database  *Database
 }
 
 func NewEmotionalSupportApp() *EmotionalSupportApp {
@@ -76,6 +77,12 @@ func NewEmotionalSupportApp() *EmotionalSupportApp {
 		state = NewAppState()
 	}
 
+	database, err := NewDatabase()
+	if err != nil {
+		log.Printf("Warning: Could not initialize database: %v", err)
+		database = nil
+	}
+
 	return &EmotionalSupportApp{
 		tracker:   NewWindowTracker(),
 		detector:  NewContextDetector(),
@@ -83,6 +90,7 @@ func NewEmotionalSupportApp() *EmotionalSupportApp {
 		notifier:  NewNotifier(),
 		state:     state,
 		timing:    DefaultNotificationTiming(),
+		database:  database,
 	}
 }
 
@@ -90,15 +98,37 @@ func (app *EmotionalSupportApp) Run() error {
 	log.Println("Starting Emotional Support Activity Tracker...")
 
 	// Send initial welcome message
-	if err := app.notifier.Send("Emotional Support", "I'm here to support you! Let's have a great coding session! 💚", ""); err != nil {
+	welcomeMsg := "I'm here to support you! Let's have a great coding session! 💚"
+	if err := app.notifier.Send("Emotional Support", welcomeMsg, ""); err != nil {
 		log.Printf("Warning: Could not send welcome notification: %v", err)
+	} else if app.database != nil {
+		// Log welcome notification
+		notif := &NotificationLog{
+			Type:    "welcome",
+			Title:   "Emotional Support",
+			Message: welcomeMsg,
+		}
+		if err := app.database.LogNotification(notif); err != nil {
+			log.Printf("Error logging welcome notification: %v", err)
+		}
 	}
+
+	// Ensure database is closed on exit
+	defer func() {
+		if app.database != nil {
+			if err := app.database.Close(); err != nil {
+				log.Printf("Error closing database: %v", err)
+			}
+		}
+	}()
 
 	ticker := time.NewTicker(app.timing.WindowCheckInterval)
 	defer ticker.Stop()
 
 	lastWindow := ""
 	lastWindowTime := time.Now()
+	lastContext := &Context{}
+	lastWindowInfo := &WindowInfo{}
 	lastNotificationTime := make(map[string]time.Time)
 
 	for {
@@ -106,8 +136,24 @@ func (app *EmotionalSupportApp) Run() error {
 		case <-ticker.C:
 			windowInfo, err := app.tracker.GetActiveWindow()
 			if err != nil {
-				log.Printf("Error getting active window: %v", err)
+				// Log but don't spam - only log occasionally
+				// This can happen in i3 when switching windows quickly
+				log.Printf("Warning: Could not get active window: %v", err)
 				continue
+			}
+
+			// Log window check to database
+			if app.database != nil {
+				check := &WindowCheck{
+					WindowKey:   fmt.Sprintf("%s|%s", windowInfo.Process, windowInfo.Title),
+					Program:     windowInfo.Process,
+					WindowTitle: windowInfo.Title,
+					ProcessName: windowInfo.Process,
+					PID:         windowInfo.PID,
+				}
+				if err := app.database.LogWindowCheck(check); err != nil {
+					log.Printf("Error logging window check: %v", err)
+				}
 			}
 
 			// Detect context
@@ -123,10 +169,33 @@ func (app *EmotionalSupportApp) Run() error {
 					if err := app.state.Save(); err != nil {
 						log.Printf("Error saving state: %v", err)
 					}
+
+					// Log window session to database (using previous window's context)
+					if app.database != nil {
+						session := &WindowSession{
+							WindowKey:     lastWindow,
+							Program:       lastContext.Program,
+							WindowTitle:    lastContext.WindowTitle,
+							ProcessName:    lastWindowInfo.Process,
+							PID:           lastWindowInfo.PID,
+							Language:      lastContext.Language,
+							IsProgramming: lastContext.IsProgramming,
+							StartedAt:      lastWindowTime,
+							EndedAt:        time.Now(),
+							Duration:       duration,
+							ProjectPath:    lastContext.ProjectPath,
+						}
+						if err := app.database.LogWindowSession(session); err != nil {
+							log.Printf("Error logging window session: %v", err)
+						}
+					}
 				}
 
+				// Update tracking variables
 				lastWindow = windowKey
 				lastWindowTime = time.Now()
+				lastContext = context
+				lastWindowInfo = windowInfo
 			}
 
 			// Calculate time spent in current window
@@ -142,8 +211,8 @@ func (app *EmotionalSupportApp) checkAndNotify(context *Context, duration time.D
 	now := time.Now()
 	timing := app.timing
 
-	// Check for time-based notifications
-	if context.IsProgramming && duration >= timing.TimeBasedNotifications.MinDuration {
+	// Check for time-based notifications (for all programs, not just programming)
+	if context.Program != "" && duration >= timing.TimeBasedNotifications.MinDuration {
 		// Check if we've reached any of the configured intervals
 		// We check within a small window (2x check interval) to account for timing variations
 		checkWindow := 2 * timing.WindowCheckInterval
@@ -158,6 +227,20 @@ func (app *EmotionalSupportApp) checkAndNotify(context *Context, duration time.D
 							log.Printf("Error sending notification: %v", err)
 						} else {
 							lastNotificationTime[key] = now
+							// Log notification to database
+							if app.database != nil {
+								notif := &NotificationLog{
+									Type:            "time_based",
+									Title:           "Emotional Support",
+									Message:         message,
+									Program:         context.Program,
+									Language:        context.Language,
+									DurationSeconds: int(duration.Seconds()),
+								}
+								if err := app.database.LogNotification(notif); err != nil {
+									log.Printf("Error logging notification: %v", err)
+								}
+							}
 						}
 					}
 				}
@@ -176,6 +259,19 @@ func (app *EmotionalSupportApp) checkAndNotify(context *Context, duration time.D
 					log.Printf("Error sending notification: %v", err)
 				} else {
 					lastNotificationTime[key] = now
+					// Log notification to database
+					if app.database != nil {
+						notif := &NotificationLog{
+							Type:     "language",
+							Title:    "Emotional Support",
+							Message:  message,
+							Program:  context.Program,
+							Language: context.Language,
+						}
+						if err := app.database.LogNotification(notif); err != nil {
+							log.Printf("Error logging notification: %v", err)
+						}
+					}
 				}
 			}
 		}
@@ -190,6 +286,17 @@ func (app *EmotionalSupportApp) checkAndNotify(context *Context, duration time.D
 				log.Printf("Error sending notification: %v", err)
 			} else {
 				lastNotificationTime[key] = now
+				// Log notification to database
+				if app.database != nil {
+					notif := &NotificationLog{
+						Type:    "health",
+						Title:   "Emotional Support",
+						Message: message,
+					}
+					if err := app.database.LogNotification(notif); err != nil {
+						log.Printf("Error logging notification: %v", err)
+					}
+				}
 			}
 		}
 	}

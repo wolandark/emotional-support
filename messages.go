@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -18,20 +19,47 @@ func NewMessageGenerator() *MessageGenerator {
 
 func (mg *MessageGenerator) GetTimeBasedMessage(ctx *Context, duration time.Duration) string {
 	hours := int(duration.Hours())
+	minutes := int(duration.Minutes()) % 60
+
+	// Format time string
+	timeStr := mg.formatDuration(hours, minutes)
+	programName := mg.formatProgramName(ctx.Program)
 
 	messages := []string{}
 
-	if ctx.Program == "vim" {
+	// Program-specific messages
+	if ctx.Program == "vim" || ctx.Program == "nvim" {
 		messages = []string{
-			fmt.Sprintf("Wow, you've been in vim for %d hour%s! I'm so proud of you! 🎉", hours, plural(hours)),
-			fmt.Sprintf("%d hour%s in vim? You're a true wizard! ✨", hours, plural(hours)),
-			fmt.Sprintf("Your vim skills are amazing! %d hour%s of focus! 💪", hours, plural(hours)),
+			fmt.Sprintf("Wow, you've been in %s for %s! I'm so proud of you! 🎉", programName, timeStr),
+			fmt.Sprintf("%s in %s? You're a true wizard! ✨", timeStr, programName),
+			fmt.Sprintf("Your %s skills are amazing! %s of focus! 💪", programName, timeStr),
+		}
+	} else if ctx.Program == "vscode" {
+		messages = []string{
+			fmt.Sprintf("You've been coding in %s for %s! Keep up the amazing work! 🚀", programName, timeStr),
+			fmt.Sprintf("%s of dedication in %s! You're doing great! 💚", timeStr, programName),
+			fmt.Sprintf("Look at you go! %s of focused coding in %s! 🌟", timeStr, programName),
 		}
 	} else if ctx.IsProgramming {
 		messages = []string{
-			fmt.Sprintf("You've been coding for %d hour%s! Keep up the amazing work! 🚀", hours, plural(hours)),
-			fmt.Sprintf("%d hour%s of dedication! You're doing great! 💚", hours, plural(hours)),
-			fmt.Sprintf("Look at you go! %d hour%s of focused coding! 🌟", hours, plural(hours)),
+			fmt.Sprintf("You've been coding in %s for %s! Keep up the amazing work! 🚀", programName, timeStr),
+			fmt.Sprintf("%s of dedication in %s! You're doing great! 💚", timeStr, programName),
+			fmt.Sprintf("Look at you go! %s of focused coding in %s! 🌟", timeStr, programName),
+		}
+	} else {
+		// Non-programming apps - fun messages
+		if ctx.Program == "firefox" || ctx.Program == "chrome" || ctx.Program == "chromium" {
+			messages = []string{
+				fmt.Sprintf("%s is truly the best! It's been %s! 🌐", programName, timeStr),
+				fmt.Sprintf("You've been browsing in %s for %s! Hope you're having fun! 💚", programName, timeStr),
+				fmt.Sprintf("%s for %s? That's some serious browsing! 🚀", programName, timeStr),
+			}
+		} else if ctx.Program != "" {
+			messages = []string{
+				fmt.Sprintf("You've been using %s for %s! Keep it up! 💪", programName, timeStr),
+				fmt.Sprintf("%s for %s? You're focused! 🌟", programName, timeStr),
+				fmt.Sprintf("Wow, %s in %s! You're doing great! 💚", timeStr, programName),
+			}
 		}
 	}
 
@@ -39,6 +67,49 @@ func (mg *MessageGenerator) GetTimeBasedMessage(ctx *Context, duration time.Dura
 		return messages[mg.rng.Intn(len(messages))]
 	}
 	return ""
+}
+
+func (mg *MessageGenerator) formatDuration(hours, minutes int) string {
+	if hours > 0 && minutes > 0 {
+		return fmt.Sprintf("%d hour%s and %d minute%s", hours, plural(hours), minutes, plural(minutes))
+	} else if hours > 0 {
+		return fmt.Sprintf("%d hour%s", hours, plural(hours))
+	} else {
+		return fmt.Sprintf("%d minute%s", minutes, plural(minutes))
+	}
+}
+
+func (mg *MessageGenerator) formatProgramName(program string) string {
+	// Capitalize and format program names nicely
+	if program == "" {
+		return "this app"
+	}
+
+	// Handle common program names
+	names := map[string]string{
+		"vim":      "Vim",
+		"nvim":     "Neovim",
+		"vscode":   "VS Code",
+		"emacs":    "Emacs",
+		"idea":     "IntelliJ IDEA",
+		"sublime":  "Sublime Text",
+		"firefox":  "Firefox",
+		"chrome":   "Chrome",
+		"chromium": "Chromium",
+		"gedit":    "gedit",
+		"kate":     "Kate",
+		"nano":     "Nano",
+	}
+
+	if niceName, ok := names[program]; ok {
+		return niceName
+	}
+
+	// Capitalize first letter
+	if len(program) > 0 {
+		return strings.ToUpper(program[:1]) + program[1:]
+	}
+	return program
 }
 
 func (mg *MessageGenerator) GetLanguageMessage(language string) string {
